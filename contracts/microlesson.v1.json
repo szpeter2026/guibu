@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://guibu.ai/contracts/microlesson.v1.json",
+  "title": "Guibu MicroLesson v1",
+  "version": "1.0.0",
+  "description": "可审计的微步 · 统一微课包形状。Guibu 壳对外交付与适配器对内映射的真源契约。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "query",
+    "summary",
+    "steps",
+    "sources",
+    "gaps",
+    "retrieval_mode",
+    "provider"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "microlesson.v1",
+      "description": "契约版本标识"
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "description": "学习者卡点问题 / 检索问句"
+    },
+    "level": {
+      "type": ["string", "null"],
+      "enum": ["beginner", "intermediate", "advanced", null],
+      "description": "可选学习者水平"
+    },
+    "summary": {
+      "type": "string",
+      "description": "微课精讲摘要（可先用上游 answer 填充）"
+    },
+    "steps": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "可执行的小步骤列表（可审计微步）"
+    },
+    "code_blocks": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["lang", "code"],
+        "properties": {
+          "lang": { "type": "string" },
+          "code": { "type": "string" }
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "description": "内容溯源：必须可回指语料。视频段时间戳在上游具备前可为 null。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "excerpt"],
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "展示用源名（常为 source_file / 标题）"
+          },
+          "file_path": {
+            "type": ["string", "null"],
+            "description": "本地或逻辑路径；上游仅给文件名时可 null"
+          },
+          "start_sec": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "description": "视频段起点（秒）；文档语料为 null"
+          },
+          "end_sec": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "description": "视频段终点（秒）；文档语料为 null"
+          },
+          "excerpt": {
+            "type": "string",
+            "description": "引用片段 / transcript 摘录"
+          },
+          "similarity": {
+            "type": ["number", "null"],
+            "description": "检索相似度（若有）"
+          },
+          "corpus_id": {
+            "type": ["string", "null"]
+          }
+        }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "description": "覆盖缺口；无命中或低置信时填写",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["topic", "reason"],
+        "properties": {
+          "topic": { "type": "string" },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "no_hit",
+              "below_threshold",
+              "no_segment_above_threshold",
+              "upstream_error",
+              "retrieval_only"
+            ]
+          }
+        }
+      }
+    },
+    "retrieval_mode": {
+      "type": "string",
+      "description": "上游检索模式，如 hybrid_rrf / retrieval_only"
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "endpoint"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "适配器名，如 demopeter"
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "实际上游路径，如 POST /api/rag/query"
+        },
+        "response_time_ms": {
+          "type": ["number", "null"]
+        },
+        "raw_chunk_count": {
+          "type": ["integer", "null"]
+        }
+      }
+    },
+    "generated_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "壳侧生成时间（ISO-8601）；学迹事件另表"
+    }
+  },
+  "examples": [
+    {
+      "schema_version": "microlesson.v1",
+      "query": "列表推导式怎么用",
+      "level": "beginner",
+      "summary": "用 [expr for x in iterable if cond] 生成列表……",
+      "steps": [
+        "写出基础 for 循环等价形式",
+        "改写为列表推导式",
+        "加上过滤条件 if"
+      ],
+      "code_blocks": [
+        {
+          "lang": "python",
+          "code": "squares = [x * x for x in range(10) if x % 2 == 0]"
+        }
+      ],
+      "sources": [
+        {
+          "source": "python数据分析实战.md",
+          "file_path": null,
+          "start_sec": null,
+          "end_sec": null,
+          "excerpt": "列表推导式可以将循环与条件合并……",
+          "similarity": 0.82,
+          "corpus_id": null
+        }
+      ],
+      "gaps": [],
+      "retrieval_mode": "hybrid_rrf",
+      "provider": {
+        "name": "demopeter",
+        "endpoint": "POST /api/rag/query",
+        "response_time_ms": 320,
+        "raw_chunk_count": 3
+      },
+      "generated_at": "2026-08-02T10:00:00+08:00"
+    }
+  ]
+}
