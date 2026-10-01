@@ -9,7 +9,7 @@ import urllib.request
 from typing import Any
 
 
-DEFAULT_BASE = "http://127.0.0.1:5200"
+DEFAULT_BASE = "http://127.0.0.1:5210"
 ENDPOINT = "/api/rag/query"
 
 

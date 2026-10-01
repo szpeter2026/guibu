@@ -110,7 +110,9 @@
               "below_threshold",
               "no_segment_above_threshold",
               "upstream_error",
-              "retrieval_only"
+              "retrieval_only",
+              "no_answer",
+              "contaminated"
             ]
           }
         }

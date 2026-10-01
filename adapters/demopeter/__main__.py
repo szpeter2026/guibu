@@ -12,6 +12,27 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+
+def _load_dotenv() -> None:
+    """Load repo-root .env into os.environ (no python-dotenv dependency)."""
+    import os
+
+    path = _ROOT / ".env"
+    if not path.is_file():
+        return
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        val = val.strip().strip("'").strip('"')
+        if key and key not in os.environ:
+            os.environ[key] = val
+
+
+_load_dotenv()
+
 from adapters.demopeter.client import ask_rag
 from adapters.demopeter.map import map_to_microlesson
 
@@ -42,7 +63,12 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2))
         return 1
 
-    lesson = map_to_microlesson(raw, query=args.query, level=args.level)
+    lesson = map_to_microlesson(
+        raw,
+        query=args.query,
+        level=args.level,
+        similarity_threshold=args.threshold,
+    )
 
     if args.validate:
         try:

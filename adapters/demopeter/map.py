@@ -10,6 +10,43 @@ SCHEMA_VERSION = "microlesson.v1"
 PROVIDER_NAME = "demopeter"
 PROVIDER_ENDPOINT = "POST /api/rag/query"
 
+# RAG「无法从知识库回答」的拒答语义标记。
+# 语料库膨胀后，离题问句的向量相似度与业务问句重叠（实测均 ~0.78），
+# 无法用 similarity 阈值区分「覆盖/缺口」，应以 LLM 拒答语义为准。
+_REFUSAL_MARKERS = (
+    "无法回答", "无法提供", "无法给出", "无法确定",
+    "没有关于", "没有找到", "未找到", "未提及",
+    "没有相关", "无相关", "查无", "不足以回答",
+    "资料中未", "知识库中暂无", "无法从", "暂无相关",
+)
+
+
+def _is_refusal(answer: str) -> bool:
+    """判断 RAG answer 是否为「知识库无法回答」的拒答语义。
+
+    - 空回答视为无覆盖（缺口）
+    - 实质性长回答（>400 字符）视为有效回答，不做关键词检测
+    - 短回答命中拒答关键词视为拒答
+    """
+    text = (answer or "").strip()
+    if not text:
+        return True
+    if len(text) > 400:
+        return False
+    return any(marker in text for marker in _REFUSAL_MARKERS)
+
+
+def _is_poetry_chunk(content: str) -> bool:
+    """识别语料污染：全唐诗 JSON chunk（非业务文档）。
+
+    DemoPeter 索引混入了诗词 JSON（含 "paragraphs"/"title" 键），
+    离题问句命中此类 chunk 时相似度假高（~0.78），不构成有效覆盖。
+    """
+    c = (content or "").strip()
+    if not c:
+        return False
+    return '"paragraphs"' in c and '"title"' in c
+
 
 def _split_steps(answer: str, max_steps: int = 6) -> list[str]:
     """Heuristic: split answer into short steps for auditable micro-steps."""
@@ -71,6 +108,7 @@ def map_to_microlesson(
     *,
     query: str | None = None,
     level: str | None = None,
+    similarity_threshold: float | None = None,
 ) -> dict[str, Any]:
     """Convert DemoPeter /api/rag/query body into microlesson.v1."""
     q = (query or raw.get("query") or "").strip()
@@ -82,15 +120,33 @@ def map_to_microlesson(
     sources = [_map_source(s) for s in sources_in if isinstance(s, dict)]
     mode = str(raw.get("retrieval_mode") or "unknown")
     gaps: list[dict[str, str]] = []
+    thr = 0.35 if similarity_threshold is None else float(similarity_threshold)
 
-    if raw.get("error"):
+    # 最高优先级：RAG 拒答 / 无覆盖 → 语义缺口。
+    # 即使 sources 非空且 similarity 高于阈值，只要 LLM 明确表示无法回答，
+    # 也视为覆盖缺口（向量相似度 ≠ 主题相关性，见 _REFUSAL_MARKERS 注释）。
+    if not raw.get("answerable", True) or _is_refusal(answer):
+        gaps.append({"topic": q or "unknown", "reason": "no_answer"})
+    elif raw.get("error"):
         gaps.append({"topic": q or "unknown", "reason": "upstream_error"})
     elif not sources:
         gaps.append({"topic": q or "unknown", "reason": "no_hit"})
     elif raw.get("retrieval_only") or "+retrieval_only" in mode:
         gaps.append({"topic": q or "unknown", "reason": "retrieval_only"})
-    elif all(s.get("similarity") is not None and float(s["similarity"]) < 0.35 for s in sources):
+    elif sources and all(
+        _is_poetry_chunk(s.get("content", "")) for s in sources_in if isinstance(s, dict)
+    ):
+        # 语料污染：命中的全是诗词 JSON，非业务文档，相似度是假高信号
+        gaps.append({"topic": q or "unknown", "reason": "contaminated"})
+    elif sources and all(
+        s.get("similarity") is None or float(s["similarity"]) < thr for s in sources
+    ):
         gaps.append({"topic": q or "unknown", "reason": "below_threshold"})
+    elif sources and any(s.get("below_threshold") for s in sources_in if isinstance(s, dict)):
+        # DemoPeter 可能标记部分 hit 低于阈值；若无一足够高置信则记缺口
+        sims = [float(s["similarity"]) for s in sources if s.get("similarity") is not None]
+        if not sims or max(sims) < thr:
+            gaps.append({"topic": q or "unknown", "reason": "below_threshold"})
 
     return {
         "schema_version": SCHEMA_VERSION,

@@ -50,6 +50,7 @@ Guibu 是面向考证 / 职培平台的 **按需技能微课交付壳（shell）
 |----|------|
 | 命名定稿 | ✅ |
 | 微课契约 `microlesson.v1` | ✅ 初版 |
+| 技能证明契约 `skill-proof.v1`（聚合导出方） | ✅ 初版 |
 | DemoPeter 只读适配（问 → sources → 微课形状） | ✅ 初版 |
 | looma 学迹适配 | ⏳ |
 | 视频 `start_sec/end_sec` | ⏳（DemoPeter Phase 0） |
@@ -59,18 +60,31 @@ Guibu 是面向考证 / 职培平台的 **按需技能微课交付壳（shell）
 
 ## 快速试用（DemoPeter 通路）
 
-前提：本机 DemoPeter Web 已启动（默认 `http://127.0.0.1:5200`），且知识库有语料。
+前提：本机 DemoPeter Web 已启动（默认 `http://127.0.0.1:5210`），且知识库有语料。
 
 ```bash
 cd /Users/jason/SurfaceZervi/guibu
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-export GUIBU_DEMOPETER_BASE_URL=http://127.0.0.1:5200
+export GUIBU_DEMOPETER_BASE_URL=http://127.0.0.1:5210
 python -m adapters.demopeter "列表推导式怎么用"
 ```
 
 成功时打印符合 `microlesson.v1` 的 JSON（含 `sources[]`；视频时间戳字段在 DemoPeter 未提供前为 `null`）。
+
+### 首仓业务闭环冒烟（推荐）
+
+DemoPeter 已启动且 Jason Mac 语料已导入时：
+
+```bash
+cd /Users/jason/SurfaceZervi/guibu
+source .venv/bin/activate
+python scripts/smoke_first_warehouse.py
+# 可选：python scripts/smoke_first_warehouse.py --json-out /tmp/guibu_smoke
+```
+
+覆盖：健康检查 → 3 条应命中问句 → 1 条应出 `gaps` → `microlesson.v1` schema 校验。
 
 ---
 
@@ -81,9 +95,15 @@ guibu/
 ├── README.md
 ├── requirements.txt
 ├── contracts/
-│   └── microlesson.v1.json
+│   ├── microlesson.v1.json
+│   └── skill-proof.v1.json # ★ 技能证明契约（JobFirst 摄入）
 ├── adapters/
 │   └── demopeter/          # 只读：POST /api/rag/query → 微课形状
+├── exporters/
+│   └── skill_proof/        # ★ microlesson.v1 → skill-proof.v1 聚合导出
+├── scripts/
+│   ├── smoke_first_warehouse.py
+│   └── smoke_skill_proof.py
 ├── docs/
 │   ├── NAMING.md
 │   └── ARCHITECTURE.md
